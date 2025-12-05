@@ -1,7 +1,7 @@
-pandas 
-scikit-learn
 fastapi
 uvicorn
+pandas
+scikit-learn
 joblib
-numpy
-streamlit
+python-multipart
+pydantic
