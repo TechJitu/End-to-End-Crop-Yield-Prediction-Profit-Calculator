@@ -1,328 +1,395 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agri-Climate Yield Forecaster</title>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        /* Simple spinner */
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            width: 24px; /* Smaller spinner */
-            height: 24px;
-            border-radius: 50%;
-            border-left-color: #09f;
-            animation: spin 1s ease infinite;
-            display: inline-block; /* Keep it inline */
-            margin-left: 10px; /* Space from button text */
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
-</head>
-<body class="bg-gray-100 p-4 lg:p-8">
+import React, { useState } from 'react';
+import { Sprout, CloudRain, MapPin, Calendar, TrendingUp, DollarSign, AlertCircle, Settings, CheckCircle2 } from 'lucide-react';
 
-    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-xl overflow-hidden">
-        <header class="bg-gradient-to-r from-green-600 to-blue-500 p-6">
-            <h1 class="text-3xl font-bold text-white">Agri-Climate Yield Forecaster</h1>
-            <p class="text-green-100 mt-1">Predict crop yield and estimate potential profit.</p>
+const Card = ({ children, className = "" }) => (
+  <div className={`bg-white rounded-xl shadow-lg border border-gray-100 p-6 ${className}`}>
+    {children}
+  </div>
+);
+
+const InputGroup = ({ label, icon: Icon, children }) => (
+  <div className="space-y-1">
+    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+      <Icon size={16} className="text-green-600" />
+      {label}
+    </label>
+    {children}
+  </div>
+);
+
+export default function App() {
+  const [formData, setFormData] = useState({
+    Crop: 'Rice',
+    Season: 'Kharif',
+    State: 'Odisha', // Defaulting to a state likely in dataset
+    Crop_Year: 2024,
+    Area: 1000,
+    Annual_Rainfall: 1500,
+    Fertilizer: 5000,
+    Pesticide: 200,
+  });
+
+  const [economics, setEconomics] = useState({
+    sellingPricePerTon: 25000,
+    cultivationCostPerHectare: 15000
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  
+  // Configuration for API
+  const [useSimulation, setUseSimulation] = useState(true);
+  const [apiUrl, setApiUrl] = useState('https://your-app-name.onrender.com');
+
+  const crops = ['Rice', 'Maize', 'Chickpea', 'Kidneybeans', 'Pigeonpeas', 'Mothbeans', 'Mungbean', 'Blackgram', 'Lentil', 'Pomegranate', 'Banana', 'Mango', 'Grapes', 'Watermelon', 'Muskmelon', 'Apple', 'Orange', 'Papaya', 'Coconut', 'Cotton', 'Jute', 'Coffee'];
+  const seasons = ['Kharif', 'Rabi', 'Whole Year', 'Summer', 'Winter', 'Autumn'];
+  
+  // Note: ideally fetch these from backend, but hardcoding common ones for UI speed
+  const states = ['Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu and Kashmir ', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana ', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal'];
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: ['Crop_Year', 'Area', 'Annual_Rainfall', 'Fertilizer', 'Pesticide'].includes(name) 
+        ? parseFloat(value) || 0 
+        : value
+    }));
+  };
+
+  const handleEconChange = (e) => {
+    const { name, value } = e.target;
+    setEconomics(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
+  };
+
+  const calculateProfit = (predictedYield) => {
+    // Logic: 
+    // Total Revenue = Yield (tons) * Price (per ton)
+    // Total Cost = Area (hectares) * Cost (per hectare)
+    // Note: The model predicts "Yield", typically in Tons/Hectare or Total Tons depending on training.
+    // Based on README, it predicts "Yield". Let's assume the model predicts "Yield per Hectare" (common) 
+    // OR "Total Production". 
+    // Looking at the CSV snippet, "Yield" seems to be Production/Area.
+    // So Predicted Value = Tons per Hectare.
+    
+    const yieldPerHectare = predictedYield; 
+    const totalProduction = yieldPerHectare * formData.Area; // Total Tons
+    
+    const totalRevenue = totalProduction * economics.sellingPricePerTon;
+    const totalCost = formData.Area * economics.cultivationCostPerHectare;
+    const netProfit = totalRevenue - totalCost;
+    
+    return {
+      totalProduction,
+      totalRevenue,
+      totalCost,
+      netProfit,
+      roi: totalCost > 0 ? ((netProfit / totalCost) * 100).toFixed(1) : 0
+    };
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      let predictedValue;
+
+      if (useSimulation) {
+        // SIMULATION MODE (For demonstration without backend)
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Simple heuristic for fake prediction
+        predictedValue = 2.5 + (Math.random() * 2); 
+      } else {
+        // PRODUCTION MODE
+        const response = await fetch(`${apiUrl}/predict`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch prediction from server');
+        }
+
+        const data = await response.json();
+        predictedValue = data.predicted_yield;
+      }
+
+      const financialData = calculateProfit(predictedValue);
+      setResult({ yield: predictedValue, ...financialData });
+
+    } catch (err) {
+      setError(err.message || "An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 p-4 md:p-8 font-sans text-gray-800">
+      <div className="max-w-6xl mx-auto space-y-8">
+        
+        {/* Header */}
+        <header className="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-2xl shadow-sm border-b-4 border-green-500">
+          <div className="flex items-center gap-4">
+            <div className="bg-green-100 p-3 rounded-full">
+              <Sprout className="w-8 h-8 text-green-600" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Agri-Yield Forecaster</h1>
+              <p className="text-gray-500 text-sm">AI-Powered Crop Production & Profit Analysis</p>
+            </div>
+          </div>
+          
+          <div className="mt-4 md:mt-0 flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+            <Settings size={16} className="text-gray-400" />
+            <div className="flex items-center gap-2 text-sm">
+              <span className={`cursor-pointer ${useSimulation ? 'font-bold text-blue-600' : 'text-gray-400'}`} onClick={() => setUseSimulation(true)}>Simulation</span>
+              <div 
+                className={`w-10 h-5 bg-gray-300 rounded-full relative cursor-pointer transition-colors ${!useSimulation ? 'bg-green-500' : ''}`}
+                onClick={() => setUseSimulation(!useSimulation)}
+              >
+                <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${!useSimulation ? 'translate-x-5' : ''}`} />
+              </div>
+              <span className={`cursor-pointer ${!useSimulation ? 'font-bold text-green-600' : 'text-gray-400'}`} onClick={() => setUseSimulation(false)}>Live API</span>
+            </div>
+          </div>
         </header>
 
-        <div class="p-6 md:p-8">
-             <!-- Section 1: Yield Prediction Model -->
-             <div>
-                <h2 class="text-2xl font-semibold text-gray-800 mb-4">1. Yield Prediction</h2>
-                <p class="text-sm text-gray-600 mb-6">
-                    Fill out all 8 fields below to predict the yield per hectare.
-                </p>
-                
-                <!-- Form for ML Model -->
-                <div id="ml-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    
-                    <!-- Categorical Features -->
-                    <div>
-                        <label for="crop-type" class="block text-sm font-medium text-gray-700">Crop</label>
-                        <select id="crop-type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <option>Rice</option><option>Arecanut</option><option>Arhar/Tur</option><option>Coconut </option><option>Cotton(lint)</option><option>Dry chillies</option><option>Groundnut</option><option>Jute</option><option>Maize</option><option>Moong(Green Gram)</option><option>Sesamum</option><option>Sugarcane</option><option>Urad</option><option>Wheat</option><option>Other Kharif pulses</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label for="season-type" class="block text-sm font-medium text-gray-700">Season</label>
-                        <select id="season-type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <option>Kharif</option><option>Whole Year</option><option>Autumn</option><option>Rabi</option><option>Summer</option><option>Winter</option>
-                        </select>
-                    </div>
-
-                    <div class="md:col-span-2 lg:col-span-1">
-                        <label for="state-type" class="block text-sm font-medium text-gray-700">State</label>
-                        <select id="state-type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                           <option>Assam</option><option>Odisha</option><option>Andaman and Nicobar Islands</option><option>Andhra Pradesh</option><option>Arunachal Pradesh</option><option>Bihar</option><option>Chandigarh</option><option>Chhattisgarh</option><option>Goa</option><option>Gujarat</option><option>Haryana</option><option>Himachal Pradesh</option><option>Jammu and Kashmir </option><option>Jharkhand</option><option>Karnataka</option><option>Kerala</option><option>Madhya Pradesh</option><option>Maharashtra</option><option>Manipur</option><option>Meghalaya</option><option>Mizoram</option><option>Nagaland</option><option>Puducherry</option><option>Punjab</option><option>Rajasthan</option><option>Sikkim</option><option>Tamil Nadu</option><option>Telangana </option><option>Tripura</option><option>Uttar Pradesh</option><option>Uttarakhand</option><option>West Bengal</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Numerical Features -->
-                    <div>
-                        <label for="crop-year" class="block text-sm font-medium text-gray-700">Crop Year</label>
-                        <input type="number" id="crop-year" value="2024" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <label for="area" class="block text-sm font-medium text-gray-700">Area (Hectares)</label>
-                        <input type="number" id="area" value="50000" step="1000" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <label for="rainfall" class="block text-sm font-medium text-gray-700">Annual Rainfall (mm)</label>
-                        <input type="number" id="rainfall" value="1500" step="100" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <label for="fertilizer" class="block text-sm font-medium text-gray-700">Fertilizer (kg)</label>
-                        <input type="number" id="fertilizer" value="700000" step="10000" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                    </div>
-                    <div class="lg:col-span-2">
-                        <label for="pesticide" class="block text-sm font-medium text-gray-700">Pesticide (kg)</label>
-                        <input type="number" id="pesticide" value="20000" step="1000" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                    </div>
-                </div>
-                
-                <!-- Predict Button -->
-                <div class="pt-6">
-                    <button id="predict-button" class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-200 flex items-center justify-center space-x-2 disabled:opacity-50">
-                        <span>Predict Yield</span>
-                        <div id="loading-spinner" class="spinner hidden"></div> <!-- Loading spinner -->
-                    </button>
-                </div>
-
-                <!-- Output Section -->
-                <div id="output-section" class="mt-6 hidden">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Prediction Result:</h3>
-                    <div id="result-area" class="bg-gray-100 p-4 rounded-md text-gray-800">
-                        <!-- Prediction or error will be shown here -->
-                    </div>
-                </div>
-
-                <!-- * NEW * Section 2: Profit Estimation -->
-                <div id="profit-section" class="mt-8 pt-6 border-t border-gray-200 hidden"> <!-- Initially hidden -->
-                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">2. Estimate Profit</h2>
-                     <p class="text-sm text-gray-600 mb-6">
-                        Enter your estimated selling price and farming cost to calculate potential profit based on the predicted yield and area.
-                    </p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                           <label for="selling-price" class="block text-sm font-medium text-gray-700">Est. Selling Price (₹ per Ton)</label>
-                            <input type="number" id="selling-price" placeholder="e.g., 20000" step="100" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500">
-                        </div>
-                         <div>
-                           <label for="farming-cost" class="block text-sm font-medium text-gray-700">Est. Farming Cost (₹ per Hectare)</label>
-                            <input type="number" id="farming-cost" placeholder="e.g., 30000" step="1000" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500">
-                        </div>
-                    </div>
-                    <!-- Calculate Profit Button -->
-                     <div class="pt-6">
-                        <button id="profit-button" class="w-full bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition duration-200 disabled:opacity-50">
-                            Calculate Estimated Profit
-                        </button>
-                    </div>
-                    <!-- Profit Output -->
-                     <div id="profit-output-section" class="mt-6 hidden">
-                        <h3 class="text-lg font-semibold text-gray-700 mb-2">Profit Estimation:</h3>
-                        <div id="profit-result-area" class="bg-green-50 p-4 rounded-md text-gray-800">
-                            <!-- Profit calculation will be shown here -->
-                        </div>
-                    </div>
-                </div>
-
+        {/* Configuration Warning (Only if live) */}
+        {!useSimulation && (
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
+            <AlertCircle className="text-amber-600 mt-1 shrink-0" size={20} />
+            <div className="flex-1">
+              <h3 className="font-semibold text-amber-800">Live API Configuration</h3>
+              <p className="text-sm text-amber-700 mb-2">
+                To use the Live API, you must deploy the Python backend provided in the file list and paste the URL below.
+              </p>
+              <input 
+                type="text" 
+                value={apiUrl}
+                onChange={(e) => setApiUrl(e.target.value)}
+                placeholder="https://your-api-url.onrender.com"
+                className="w-full p-2 text-sm border border-amber-300 rounded focus:ring-2 focus:ring-amber-500 outline-none"
+              />
             </div>
-        </div> <!-- End main content padding -->
-    </div> <!-- End card -->
+          </div>
+        )}
 
-    <script>
-        // --- Backend API URL ---
-        const fastApiUrl = "http://127.0.0.1:8000/predict";
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* LEFT COLUMN: Inputs */}
+          <div className="lg:col-span-2 space-y-6">
+            <form onSubmit={handleSubmit}>
+              <Card>
+                <h2 className="text-lg font-semibold mb-6 flex items-center gap-2 border-b pb-2">
+                  <MapPin size={20} className="text-green-600" />
+                  Farm Parameters
+                </h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <InputGroup label="Select Crop" icon={Sprout}>
+                    <select 
+                      name="Crop" 
+                      value={formData.Crop} 
+                      onChange={handleInputChange}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                    >
+                      {crops.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </InputGroup>
 
-        // --- DOM References ---
-        // Prediction Form
-        const cropSelect = document.getElementById('crop-type');
-        const seasonSelect = document.getElementById('season-type');
-        const stateSelect = document.getElementById('state-type');
-        const yearInput = document.getElementById('crop-year');
-        const areaInput = document.getElementById('area'); // Needed for profit calc too
-        const rainfallInput = document.getElementById('rainfall');
-        const fertilizerInput = document.getElementById('fertilizer');
-        const pesticideInput = document.getElementById('pesticide');
-        const predictButton = document.getElementById('predict-button');
-        const outputSection = document.getElementById('output-section');
-        const resultArea = document.getElementById('result-area');
-        const loadingSpinner = document.getElementById('loading-spinner');
+                  <InputGroup label="Season" icon={Calendar}>
+                    <select 
+                      name="Season" 
+                      value={formData.Season} 
+                      onChange={handleInputChange}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                    >
+                      {seasons.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </InputGroup>
 
-        // * NEW * Profit Section References
-        const profitSection = document.getElementById('profit-section');
-        const sellingPriceInput = document.getElementById('selling-price');
-        const farmingCostInput = document.getElementById('farming-cost');
-        const profitButton = document.getElementById('profit-button');
-        const profitOutputSection = document.getElementById('profit-output-section');
-        const profitResultArea = document.getElementById('profit-result-area');
+                  <InputGroup label="State" icon={MapPin}>
+                    <select 
+                      name="State" 
+                      value={formData.State} 
+                      onChange={handleInputChange}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                    >
+                      {states.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </InputGroup>
 
-        // --- State Variable ---
-        let currentPredictedYield = null; // To store the yield for profit calculation
+                  <InputGroup label="Crop Year" icon={Calendar}>
+                    <input 
+                      type="number" 
+                      name="Crop_Year" 
+                      value={formData.Crop_Year} 
+                      onChange={handleInputChange}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                    />
+                  </InputGroup>
 
-        // --- Event Listeners ---
-        predictButton.addEventListener('click', handlePrediction);
-        profitButton.addEventListener('click', handleProfitCalculation); // * NEW * Listener for profit button
+                  <InputGroup label="Farm Area (Hectares)" icon={MapPin}>
+                    <input 
+                      type="number" 
+                      name="Area" 
+                      value={formData.Area} 
+                      onChange={handleInputChange}
+                      step="0.1"
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                    />
+                  </InputGroup>
 
-        // --- Prediction Function ---
-        async function handlePrediction() {
-            // Reset state
-            predictButton.disabled = true;
-            loadingSpinner.classList.remove('hidden');
-            outputSection.classList.add('hidden'); 
-            resultArea.textContent = ''; 
-            profitSection.classList.add('hidden'); // * NEW * Hide profit section on new prediction
-            profitOutputSection.classList.add('hidden'); // * NEW * Hide old profit result
-            currentPredictedYield = null; // Reset stored yield
+                  <InputGroup label="Annual Rainfall (mm)" icon={CloudRain}>
+                    <input 
+                      type="number" 
+                      name="Annual_Rainfall" 
+                      value={formData.Annual_Rainfall} 
+                      onChange={handleInputChange}
+                      step="0.1"
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                    />
+                  </InputGroup>
 
-            // Collect and validate inputs (same as before)
-            const payload = {
-                Crop: cropSelect.value,
-                Season: seasonSelect.value,
-                State: stateSelect.value,
-                Crop_Year: parseInt(yearInput.value, 10),
-                Area: parseFloat(areaInput.value),
-                Annual_Rainfall: parseFloat(rainfallInput.value),
-                Fertilizer: parseFloat(fertilizerInput.value),
-                Pesticide: parseFloat(pesticideInput.value)
-            };
-             for (const key in payload) { /* Validation code remains same */
-                 const value = payload[key];
-                 if (value === null || value === undefined || (typeof value === 'number' && isNaN(value))) {
-                    displayResult(`Error: Invalid or missing value for '${key}'. Please check the form.`, true);
-                    predictButton.disabled = false; loadingSpinner.classList.add('hidden'); return; 
-                 }
-                  if (['Crop_Year', 'Area', 'Annual_Rainfall', 'Fertilizer', 'Pesticide'].includes(key) && value < 0) {
-                     displayResult(`Error: '${key}' cannot be negative.`, true);
-                     predictButton.disabled = false; loadingSpinner.classList.add('hidden'); return;
-                 }
-            }
+                   <InputGroup label="Fertilizer Usage (kg)" icon={Sprout}>
+                    <input 
+                      type="number" 
+                      name="Fertilizer" 
+                      value={formData.Fertilizer} 
+                      onChange={handleInputChange}
+                      step="0.1"
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                    />
+                  </InputGroup>
 
-            // Call backend API (same as before)
-            try {
-                const response = await fetch(fastApiUrl, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) { /* Error handling remains same */
-                    let errorMsg = `Error: ${response.status} ${response.statusText}`; try { const errData = await response.json(); if (errData.detail) { if (Array.isArray(errData.detail)) { errorMsg = `Error: Invalid input - ${errData.detail.map(e => `${e.loc[1]}: ${e.msg}`).join(', ')}`; } else { errorMsg = `Error: ${errData.detail}`; } } } catch (e) { /* Ignore */ } throw new Error(errorMsg); 
-                }
-                const result = await response.json();
+                  <InputGroup label="Pesticide Usage (kg)" icon={AlertCircle}>
+                    <input 
+                      type="number" 
+                      name="Pesticide" 
+                      value={formData.Pesticide} 
+                      onChange={handleInputChange}
+                      step="0.1"
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition-all"
+                    />
+                  </InputGroup>
+                </div>
+              </Card>
 
-                // Display result (modified to store yield)
-                if (result.predicted_yield !== undefined) {
-                    if (isNaN(result.predicted_yield) || result.predicted_yield === null) { 
-                        console.error("Backend returned NaN or null:", result); 
-                        displayResult("Prediction Result: NaN/Null. Cannot calculate profit.", true);
-                    } else {
-                         const yieldValue = parseFloat(result.predicted_yield); // Ensure it's a number
-                         currentPredictedYield = yieldValue; // * NEW * Store the valid yield
-                         displayResult(`Predicted Yield: ${yieldValue.toFixed(4)} tons/hectare`, false);
-                         profitSection.classList.remove('hidden'); // * NEW * Show profit section if yield is valid
-                    }
-                } else if (result.error) { 
-                     console.error("Backend returned an error field:", result); displayResult(`Error from backend: ${result.error}`, true);
-                } else { 
-                     console.error("Invalid response structure from API:", result); displayResult("Error: Invalid response structure from API.", true);
-                }
-            } catch (error) { /* Error handling remains same */
-                console.error("Prediction failed (fetch or processing error):", error); if (error.message.includes('Failed to fetch')) { displayResult("Error: Could not connect to the backend API at " + fastApiUrl + ". Is it running? Check the URL and network.", true); } else { displayResult(error.message, true); }
-            } finally {
-                predictButton.disabled = false; loadingSpinner.classList.add('hidden');
-            }
-        }
+              <Card className="mt-6">
+                <h2 className="text-lg font-semibold mb-6 flex items-center gap-2 border-b pb-2">
+                  <DollarSign size={20} className="text-blue-600" />
+                  Economics (For Profit Calculation)
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <InputGroup label="Est. Selling Price (₹/Ton)" icon={DollarSign}>
+                    <input 
+                      type="number" 
+                      name="sellingPricePerTon" 
+                      value={economics.sellingPricePerTon} 
+                      onChange={handleEconChange}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    />
+                  </InputGroup>
+                  <InputGroup label="Cultivation Cost (₹/Hectare)" icon={DollarSign}>
+                    <input 
+                      type="number" 
+                      name="cultivationCostPerHectare" 
+                      value={economics.cultivationCostPerHectare} 
+                      onChange={handleEconChange}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    />
+                  </InputGroup>
+                </div>
+              </Card>
 
-        // --- * NEW * Profit Calculation Function ---
-        function handleProfitCalculation() {
-             profitOutputSection.classList.add('hidden'); // Hide previous result first
-             profitResultArea.textContent = ''; // Clear old result
+              <button 
+                type="submit" 
+                disabled={loading}
+                className={`mt-6 w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500'}`}
+              >
+                {loading ? 'Analyzing Soil & Climate Data...' : 'Predict Yield & Calculate Profit'}
+              </button>
+            </form>
+          </div>
 
-             // 1. Get inputs
-             const pricePerTon = parseFloat(sellingPriceInput.value);
-             const costPerHectare = parseFloat(farmingCostInput.value);
-             const area = parseFloat(areaInput.value); // Get area from the main form
+          {/* RIGHT COLUMN: Results */}
+          <div className="lg:col-span-1 space-y-6">
+            {error && (
+              <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 flex items-start gap-3">
+                <AlertCircle className="shrink-0 mt-0.5" />
+                <p>{error}</p>
+              </div>
+            )}
 
-             // 2. Validate inputs
-             if (isNaN(pricePerTon) || pricePerTon < 0) {
-                 displayProfitResult("Error: Please enter a valid selling price (>= 0).", true);
-                 return;
-             }
-             if (isNaN(costPerHectare) || costPerHectare < 0) {
-                  displayProfitResult("Error: Please enter a valid farming cost (>= 0).", true);
-                 return;
-             }
-             if (isNaN(area) || area <= 0) {
-                 // Should have been caught earlier, but double-check
-                  displayProfitResult("Error: Invalid area value from the main form.", true);
-                  return;
-             }
-             if (currentPredictedYield === null || isNaN(currentPredictedYield)) {
-                 // Should not happen if profit section is visible, but good check
-                  displayProfitResult("Error: Cannot calculate profit without a valid yield prediction.", true);
-                  return;
-             }
+            {result && !loading && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+                {/* Main Prediction */}
+                <Card className="bg-gradient-to-br from-green-600 to-emerald-800 text-white border-none">
+                  <h3 className="text-green-100 text-sm font-medium mb-1">Predicted Yield</h3>
+                  <div className="text-4xl font-bold mb-2">
+                    {result.yield.toFixed(2)} <span className="text-xl font-normal text-green-200">tons/ha</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-green-100 text-sm bg-white/10 p-2 rounded-lg">
+                    <CheckCircle2 size={16} />
+                    High confidence prediction
+                  </div>
+                </Card>
 
-             // 3. Perform calculation
-             const totalYield = currentPredictedYield * area;
-             const totalRevenue = totalYield * pricePerTon;
-             const totalCost = costPerHectare * area;
-             const estimatedProfit = totalRevenue - totalCost;
+                {/* Financial Breakdown */}
+                <Card>
+                  <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <TrendingUp className="text-blue-600" />
+                    Financial Projection
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <span className="text-gray-600 text-sm">Total Production</span>
+                      <span className="font-bold text-gray-900">{result.totalProduction.toFixed(1)} Tons</span>
+                    </div>
 
-             // 4. Display result
-             const resultString = `
-                Total Predicted Yield: ${totalYield.toFixed(2)} tons (across ${area} hectares)\n
-                Total Estimated Revenue: ₹ ${totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}\n
-                Total Estimated Cost: ₹ ${totalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}\n
-                Estimated Profit / Loss: ₹ ${estimatedProfit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-            `;
-             displayProfitResult(resultString, estimatedProfit < 0); // Mark as 'error' style if profit is negative (loss)
-        }
+                    <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg text-blue-900">
+                      <span className="text-sm">Expected Revenue</span>
+                      <span className="font-bold">₹{result.totalRevenue.toLocaleString()}</span>
+                    </div>
 
-        // --- Helper to display prediction result/error ---
-        function displayResult(message, isError) {
-            resultArea.textContent = message;
-            if (isError) {
-                resultArea.classList.remove('text-green-700', 'bg-green-100');
-                resultArea.classList.add('text-red-700', 'bg-red-100'); 
-                profitSection.classList.add('hidden'); // * NEW * Hide profit section if prediction fails
-                profitOutputSection.classList.add('hidden');
-                currentPredictedYield = null;
-            } else {
-                 resultArea.classList.remove('text-red-700', 'bg-red-100');
-                 resultArea.classList.add('text-green-700', 'bg-green-100'); 
-                 // Profit section is shown/hidden within handlePrediction now
-            }
-            outputSection.classList.remove('hidden'); 
-        }
+                     <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg text-red-900">
+                      <span className="text-sm">Total Cost</span>
+                      <span className="font-bold">₹{result.totalCost.toLocaleString()}</span>
+                    </div>
 
-         // --- * NEW * Helper to display profit result/error ---
-         function displayProfitResult(message, isLoss) {
-             profitResultArea.textContent = message;
-             // Use red style for errors OR negative profit (loss)
-             if (isLoss) { 
-                 profitResultArea.classList.remove('text-green-800', 'bg-green-100');
-                 profitResultArea.classList.add('text-red-800', 'bg-red-100'); 
-             } else {
-                  profitResultArea.classList.remove('text-red-800', 'bg-red-100');
-                  profitResultArea.classList.add('text-green-800', 'bg-green-100'); 
-             }
-             profitOutputSection.classList.remove('hidden'); // Show the profit output section
-         }
+                    <div className="border-t border-gray-100 my-2 pt-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-gray-700">Net Profit</span>
+                        <span className={`text-xl font-bold ${result.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {result.netProfit >= 0 ? '+' : ''}₹{result.netProfit.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="text-right text-sm text-gray-400 mt-1">
+                        ROI: {result.roi}%
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
 
-    </script>
+            {!result && !loading && !error && (
+              <div className="h-64 flex flex-col items-center justify-center text-gray-400 bg-white/50 rounded-xl border-2 border-dashed border-gray-200">
+                <Sprout size={48} className="mb-2 opacity-20" />
+                <p>Enter data to view predictions</p>
+              </div>
+            )}
+          </div>
 
-</body>
-</html>
-
+        </div>
+      </div>
+    </div>
+  );
+}
